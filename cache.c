@@ -345,6 +345,7 @@ cache_create_mshr(char *name,		/* name of the cache */
  /* start mshr creation */
   cp->ready = 0;  /* cache ready to be used*/
   if (num_mshr > 0) {
+     //printf("mshr created\n");
      cp->num_mshr = num_mshr;
      cp->mshr = (struct cache_mshr_t *) (malloc(sizeof(struct cache_mshr_t) * cp->num_mshr));
   } else {
@@ -548,7 +549,8 @@ cache_access(struct cache_t *cp,	/* cache to access */
 	     tick_t now,		/* time of access */
 	     byte_t **udata,		/* for return of user data ptr */
 	     md_addr_t *repl_addr,	/* for address of replaced block */
- 	     tick_t *mem_ready)         /* ptr to mem_ready of ruu_station */
+ 	     tick_t *mem_ready,/* ptr to mem_ready of ruu_station */
+             int mshr_enabled)         
 {
   byte_t *p = vp;
   md_addr_t tag = CACHE_TAG(cp, addr);
@@ -558,7 +560,6 @@ cache_access(struct cache_t *cp,	/* cache to access */
   struct cache_blk_t *blk, *repl;
   int lat = 0;
   int i,mshr_hit = -1;
-
   /* default replacement address */
   if (repl_addr)
     *repl_addr = 0;
@@ -612,17 +613,15 @@ cache_access(struct cache_t *cp,	/* cache to access */
 
   /* **MISS** */
   cp->misses++;
+///  printf("mshr enabled=%d\n",mshr_enabled);
+
+//printf("cache_access miss num_mshr=%d\n",cp->num_mshr);
+if(mshr_enabled){
+//printf("cache_access with MSHR\n");
 // search mshr first to see if already exists, if so wait
 // if not in mshr, insert
   if (cp->num_mshr>0) {
-     for (i = 0; i < cp->num_mshr; i++) {
-	if ((cp->mshr[i].ready > now) && (blk_addr == cp->mshr[i].block_addr) && (cp->mshr[i].target_num<=4)){
-	   /* we have an MSHR for the current block already */
-	   cp->mshr[i].target_num++;
-           //printf("MSHR:target=%d",cp->mshr[i].target_num);
-	   mshr_hit=i;
-	   break;
-	}
+     
      for (i = 0; i < cp->num_mshr; i++) {
         if (cp->mshr[i].ready <= now) {
            /* we have an empty mshr, so we can proceed with the miss */
@@ -635,14 +634,15 @@ cache_access(struct cache_t *cp,	/* cache to access */
 
      if (mshr_hit == -1) { /* no empty mshr, so stall! */
        cp->mshr_full++;
-       *mem_ready = cp->ready;
+       if(mem_ready!=NULL)*mem_ready = cp->ready;
        cp->mshr_full_stall += cp->ready - now;
        //if (cp->ready <= now) panic("Should have had empty mshr!");
        return MSHR_FULL;
      }
   }
- }
-
+ 
+}
+//printf("B4 repl\n");
   /* select the appropriate block to replace, and re-link this entry to
      the appropriate place in the way list */
   switch (cp->policy) {
@@ -695,7 +695,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
 				   cp->bsize, repl, now+lat);
 	}
     }
-
+//  printf("B4 blkaccess\n");
   /* update block tags */
   repl->tag = tag;
   repl->status = CACHE_BLK_VALID;	/* dirty bit set on update */
@@ -725,19 +725,20 @@ cache_access(struct cache_t *cp,	/* cache to access */
   if (cp->hsize)
     link_htab_ent(cp, &cp->sets[set], repl);
 
+//if(mshr_enabled==1){
   /* populate mshr entries*/
-  if (cp->num_mshr>0) {
+  if (cp->num_mshr>0 && mshr_hit!=-1) {
 
      cp->mshr[mshr_hit].ready = repl->ready;
      cp->mshr[mshr_hit].block_addr= blk_addr;
-     //cp->mshr[mshr_hit].target_num = 1; TODO check what is this
-     printf("MSHR:ready and block_addr=",repl->ready,blk_addr);
+     cp->mshr[mshr_hit].target_num = 1; 
+//     printf("MSHR:ready and block_addr=",repl->ready,blk_addr);
      for (i = 0, cp->ready = cp->mshr[0].ready; i < cp->num_mshr; i++) {
         if (cp->mshr[i].ready < cp->ready)
            cp->ready = cp->mshr[i].ready;
      }
   }
-
+//}
   /* return latency of the operation */
   return lat;
 
@@ -747,6 +748,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
   /* **HIT** */
   cp->hits++;
 
+if(mshr_enabled==1){
  /* mshr: check for secondary miss */
   if (cp->num_mshr>0) {
 
@@ -763,7 +765,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
               }
               else {
                  /* target space full, so stall! */
-                 *mem_ready = cp->mshr[i].ready;
+                 if(mem_ready!=NULL)*mem_ready = cp->mshr[i].ready;
                  cp->mshr_target_full++;
                  //cp->mshr_target_full_stall += cp->mshr[i].ready - now; TODO
                  return MSHR_TARGET_FULL;
@@ -774,7 +776,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
   
   }
 
-
+}
   /* copy data out of cache block, if block exists */
   if (cp->balloc)
     {
@@ -809,7 +811,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
   
   /* **FAST HIT** */
   cp->hits++;
-
+if(mshr_enabled==1){
  /* mshr: check for secondary miss */
   if (cp->num_mshr>0) {
 
@@ -826,7 +828,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
               }
               else {
                  /* target space full, so stall! */
-                 *mem_ready = cp->mshr[i].ready;
+                 if(mem_ready!=NULL)*mem_ready = cp->mshr[i].ready;
                  cp->mshr_target_full++;
                  //cp->mshr_target_full_stall += cp->mshr[i].ready - now; TODO
                  return MSHR_TARGET_FULL;
@@ -836,7 +838,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
     }
 
   }
-
+}
   /* copy data out of cache block, if block exists */
   if (cp->balloc)
     {

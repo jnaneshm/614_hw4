@@ -291,16 +291,18 @@ void cache_stats(struct cache_t *cp, FILE *stream);
    at NOW, places pointer to block user data in *UDATA, *P is untouched if
    cache blocks are not allocated (!CP->BALLOC), UDATA should be NULL if no
    user data is attached to blocks */
-unsigned int				/* latency of access in cycles */
-cache_access(struct cache_t *cp,	/* cache to access */
-	     enum mem_cmd cmd,		/* access type, Read or Write */
-	     md_addr_t addr,		/* address of access */
-	     void *vp,			/* ptr to buffer for input/output */
-	     int nbytes,		/* number of bytes to access */
-	     tick_t now,		/* time of access */
-	     byte_t **udata,		/* for return of user data ptr */
-	     md_addr_t *repl_addr,	/* for address of replaced block */
-	     tick_t *mem_ready);
+unsigned int                            /* latency of access in cycles */
+cache_access(struct cache_t *cp,        /* cache to access */
+             enum mem_cmd cmd,          /* access type, Read or Write */
+             md_addr_t addr,            /* address of access */
+             void *vp,                  /* ptr to buffer for input/output */
+             int nbytes,                /* number of bytes to access */
+             tick_t now,                /* time of access */
+             byte_t **udata,            /* for return of user data ptr */
+             md_addr_t *repl_addr,      /* for address of replaced block */
+             tick_t *mem_ready,
+	     int mshr_enabled);
+
 /* cache access functions, these are safe, they check alignment and
    permissions */
 #define cache_double(cp, cmd, addr, p, now, udata)	\
