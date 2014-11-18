@@ -162,7 +162,7 @@ static char *cache_dl1_opt;
 
 /* l1 data cache hit latency (in cycles) */
 static int cache_dl1_lat;
-static int cache_mshr_enabled;
+static char* cache_mshr_enabled;
 static int cache_mshr_num;
 
 /* l2 data cache config, i.e., {<config>|none} */
@@ -1026,9 +1026,9 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
       if (sscanf(cache_dl1_opt, "%[^:]:%d:%d:%d:%c",
 		 name, &nsets, &bsize, &assoc, &c) != 5)
 	fatal("bad l1 D-cache parms: <name>:<nsets>:<bsize>:<assoc>:<repl>");
-      cache_dl1 = cache_create(name, nsets, bsize, /* balloc */FALSE,
+      cache_dl1 = cache_create_mshr(name, nsets, bsize, /* balloc */FALSE,
 			       /* usize */0, assoc, cache_char2policy(c),
-			       dl1_access_fn, /* hit lat */cache_dl1_lat);
+			       dl1_access_fn, /* hit lat */cache_dl1_lat,cache_mshr_num);
 
       /* is the level 2 D-cache defined? */
       if (!mystricmp(cache_dl2_opt, "none"))
@@ -2626,6 +2626,7 @@ ruu_issue(void)
   int i, load_lat, tlb_lat, n_issued,cache_access_blocked;
   struct RS_link *node, *next_node;
   struct res_template *fu;
+  tick_t memready=0; 
 
   /* FIXME: could be a little more efficient when scanning the ready queue */
 
@@ -2746,7 +2747,7 @@ ruu_issue(void)
 				  load_lat =
 				    cache_access(cache_dl1, Read,
 						 (rs->addr & ~3), NULL, 4,
-						 sim_cycle, NULL, NULL, NULL);
+						 sim_cycle, NULL, NULL, &memready);
   				 if (load_lat < 0) { // mshr not available
                                             cache_access_blocked = 1;
                                             rs->issued = FALSE;
@@ -2781,7 +2782,7 @@ ruu_issue(void)
 			    }
 
 			  /* use computed cache access latency */
-			  eventq_queue_event(rs, sim_cycle + load_lat);
+			  if(load_lat>0) eventq_queue_event(rs, sim_cycle + load_lat);
 
 			  /* entered execute stage, indicate in pipe trace */
 			  ptrace_newstage(rs->ptrace_seq, PST_EXECUTE,

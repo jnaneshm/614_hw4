@@ -619,6 +619,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
 	if ((cp->mshr[i].ready > now) && (blk_addr == cp->mshr[i].block_addr) && (cp->mshr[i].target_num<=4)){
 	   /* we have an MSHR for the current block already */
 	   cp->mshr[i].target_num++;
+           //printf("MSHR:target=%d",cp->mshr[i].target_num);
 	   mshr_hit=i;
 	   break;
 	}
@@ -627,6 +628,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
            /* we have an empty mshr, so we can proceed with the miss */
            mshr_hit = i;
            cp->mshr_misses++;
+           //printf("MSHR:miss=%d",cp->mshr_misses);
            break;
         }
      }
@@ -729,7 +731,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
      cp->mshr[mshr_hit].ready = repl->ready;
      cp->mshr[mshr_hit].block_addr= blk_addr;
      //cp->mshr[mshr_hit].target_num = 1; TODO check what is this
-
+     printf("MSHR:ready and block_addr=",repl->ready,blk_addr);
      for (i = 0, cp->ready = cp->mshr[0].ready; i < cp->num_mshr; i++) {
         if (cp->mshr[i].ready < cp->ready)
            cp->ready = cp->mshr[i].ready;
