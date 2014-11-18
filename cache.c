@@ -515,6 +515,14 @@ cache_reg_stats(struct cache_t *cp,	/* cache instance */
   sprintf(buf, "%s.inv_rate", name);
   sprintf(buf1, "%s.invalidations / %s.accesses", name, name);
   stat_reg_formula(sdb, buf, "invalidation rate (i.e., invs/ref)", buf1, NULL);
+  if(cp->num_mshr>0){ 
+  sprintf(buf, "%s.mshr_hits", name);
+  stat_reg_counter(sdb, buf, "%s mshr hits", &cp->mshr_hits, 0, NULL);
+  sprintf(buf, "%s.mshr_misses", name);
+  stat_reg_counter(sdb, buf, "%s mshr hits", &cp->mshr_misses, 0, NULL);
+  sprintf(buf, "%s.mshr_accesses", name);
+  stat_reg_counter(sdb, buf, "%s mshr accesses", &cp->mshr_accesses, 0, NULL);
+  }
 }
 
 /* print cache stats */
@@ -621,7 +629,7 @@ if(mshr_enabled){
 // search mshr first to see if already exists, if so wait
 // if not in mshr, insert
   if (cp->num_mshr>0) {
-     
+    cp->mshr_accesses++;     
      for (i = 0; i < cp->num_mshr; i++) {
         if (cp->mshr[i].ready <= now) {
            /* we have an empty mshr, so we can proceed with the miss */
@@ -635,7 +643,6 @@ if(mshr_enabled){
      if (mshr_hit == -1) { /* no empty mshr, so stall! */
        cp->mshr_full++;
        if(mem_ready!=NULL)*mem_ready = cp->ready;
-       cp->mshr_full_stall += cp->ready - now;
        //if (cp->ready <= now) panic("Should have had empty mshr!");
        return MSHR_FULL;
      }
@@ -748,13 +755,13 @@ if(mshr_enabled){
   /* **HIT** */
   cp->hits++;
 
-if(mshr_enabled==1){
+if(mshr_enabled){
  /* mshr: check for secondary miss */
   if (cp->num_mshr>0) {
-
      /* is this a secondary miss? */
      if (blk->ready > now) {
         /* search for matching mshr */
+    	cp->mshr_accesses++;     
         for (i = 0; i < cp->num_mshr; i++) {
            if (cp->mshr[i].block_addr == blk_addr && cp->mshr[i].ready > now) {
               if (cp->mshr[i].target_num < 4) {
@@ -767,15 +774,12 @@ if(mshr_enabled==1){
                  /* target space full, so stall! */
                  if(mem_ready!=NULL)*mem_ready = cp->mshr[i].ready;
                  cp->mshr_target_full++;
-                 //cp->mshr_target_full_stall += cp->mshr[i].ready - now; TODO
                  return MSHR_TARGET_FULL;
               }
            }
        }
     }
-  
   }
-
 }
   /* copy data out of cache block, if block exists */
   if (cp->balloc)
@@ -814,9 +818,9 @@ if(mshr_enabled==1){
 if(mshr_enabled==1){
  /* mshr: check for secondary miss */
   if (cp->num_mshr>0) {
-
      /* is this a secondary miss? */
      if (blk->ready > now) {
+        cp->mshr_accesses++;     
         /* search for matching mshr */
         for (i = 0; i < cp->num_mshr; i++) {
            if (cp->mshr[i].block_addr == blk_addr && cp->mshr[i].ready > now) {
@@ -830,13 +834,11 @@ if(mshr_enabled==1){
                  /* target space full, so stall! */
                  if(mem_ready!=NULL)*mem_ready = cp->mshr[i].ready;
                  cp->mshr_target_full++;
-                 //cp->mshr_target_full_stall += cp->mshr[i].ready - now; TODO
                  return MSHR_TARGET_FULL;
               }
            }
        }
     }
-
   }
 }
   /* copy data out of cache block, if block exists */

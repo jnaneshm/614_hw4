@@ -2186,7 +2186,7 @@ ruu_commit(void)
 	      /* stores must retire their store value to the cache at commit,
 		 try to get a store port (functional unit allocation) */
 	      fu = res_get(fu_pool, MD_OP_FUCLASS(LSQ[LSQ_head].op));
-		if (fu && rs->mem_ready <= sim_cycle) //mshr or target should be free for load/store
+		if (fu && (LSQ[LSQ_head].mem_ready <= sim_cycle)) //mshr or target should be free for load/store
 		{
 		//printf("ruu commit 1\n");
 		  /* reserve the functional unit */
@@ -2202,21 +2202,12 @@ ruu_commit(void)
 		      /* commit store value to D-cache */
 		      lat =
 			cache_access(cache_dl1, Write, (LSQ[LSQ_head].addr&~3),
-				     NULL, 4, sim_cycle, NULL, NULL,&memready,1);
-  				if (lat < 0) { // mshr not available
-                                            cache_access_blocked = 1;
-                                            rs->issued = FALSE;
-					    rs->mem_ready=memready;
-                                            readyq_enqueue(rs);
-                                 } else {
-                                            cache_access_blocked = 0;
-		      				if (lat > cache_dl1_lat)
-						events |= PEV_CACHEMISS;
-				}
+				     NULL, 4, sim_cycle, NULL, NULL,&LSQ[LSQ_head].mem_ready ,1);
+		    	if (lat > cache_dl1_lat)
+			   events |= PEV_CACHEMISS;
 		    }
 
-		  /* all loads and stores must to access D-TLB */
-		  if (dtlb && !cache_access_blocked)
+		  if (dtlb)
 		    {
 		      /* access the D-TLB */
 		      lat =
@@ -2697,10 +2688,10 @@ ruu_issue(void)
 	      if (MD_OP_FUCLASS(rs->op) != NA)
 		{
 		  fu = res_get(fu_pool, MD_OP_FUCLASS(rs->op));
-			printf("ruu_issue 1:%d\n",rs->mem_ready);
+			//printf("ruu_issue 1:%d\n",rs->mem_ready);
 		  if (fu && (rs->mem_ready <= sim_cycle)) //mshr or target should be free for load/store
 		    {
-			printf("ruu_issue 2\n");
+			//printf("ruu_issue 2\n");
 		      /* got one! issue inst to functional unit */
 		      rs->issued = TRUE;
 		      /* reserve the functional unit */
@@ -2756,13 +2747,13 @@ ruu_issue(void)
 			      if (cache_dl1 && valid_addr)
 				{
 					memready=0;
-					printf("ruu_issue 3\n");
+					//printf("ruu_issue 3\n");
 				  /* access the cache if non-faulting */
 				  load_lat =
 				    cache_access(cache_dl1, Read,
 						 (rs->addr & ~3), NULL, 4,
 						 sim_cycle, NULL, NULL, &memready,1);
-					printf("ruu_issue 4 for addr %llu:%d\n",(rs->addr & ~3),load_lat);
+					//printf("ruu_issue 4 for addr %llu:%d\n",(rs->addr & ~3),load_lat);
   				 if (load_lat < 0) { // mshr not available
                                             cache_access_blocked = 1;
                                             rs->issued = FALSE;
@@ -3970,7 +3961,7 @@ ruu_dispatch(void)
 	  rs->seq = ++inst_seq;
 	  rs->queued = rs->issued = rs->completed = FALSE;
 	  rs->ptrace_seq = pseq;
-
+	  rs->mem_ready = 0;
 	  /* split ld/st's into two operations: eff addr comp + mem access */
 	  if (MD_OP_FLAGS(op) & F_MEM)
 	    {
@@ -3997,7 +3988,7 @@ ruu_dispatch(void)
 	      lsq->seq = ++inst_seq;
 	      lsq->queued = lsq->issued = lsq->completed = FALSE;
 	      lsq->ptrace_seq = ptrace_seq++;
-
+ 	      lsq->mem_ready = 0;
 	      /* pipetrace this uop */
 	      ptrace_newuop(lsq->ptrace_seq, "internal ld/st", lsq->PC, 0);
 	      ptrace_newstage(lsq->ptrace_seq, PST_DISPATCH, 0);
