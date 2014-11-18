@@ -440,7 +440,7 @@ dl1_access_fn(enum mem_cmd cmd,		/* access cmd, Read or Write */
     {
       /* access next level of data cache hierarchy */
       lat = cache_access(cache_dl2, cmd, baddr, NULL, bsize,
-			 /* now */now, /* pudata */NULL, /* repl addr */NULL,NULL,0);
+			 /* now */now, /* pudata */NULL, /* repl addr */NULL,NULL);
       if (cmd == Read)
 	return lat;
       else
@@ -494,7 +494,7 @@ if (cache_il2)
     {
       /* access next level of inst cache hierarchy */
       lat = cache_access(cache_il2, cmd, baddr, NULL, bsize,
-			 /* now */now, /* pudata */NULL, /* repl addr */NULL,NULL,0);
+			 /* now */now, /* pudata */NULL, /* repl addr */NULL,NULL);
       if (cmd == Read)
 	return lat;
       else
@@ -2147,8 +2147,6 @@ ruu_commit(void)
 {
   int i, lat, events, committed = 0;
   static counter_t sim_ret_insn = 0;
-  tick_t memready=0;
-  int cache_access_blocked;
   /* all values must be retired to the architected reg file in program order */
   while (RUU_num > 0 && committed < ruu_commit_width)
     {
@@ -2202,7 +2200,11 @@ ruu_commit(void)
 		      /* commit store value to D-cache */
 		      lat =
 			cache_access(cache_dl1, Write, (LSQ[LSQ_head].addr&~3),
-				     NULL, 4, sim_cycle, NULL, NULL,&LSQ[LSQ_head].mem_ready ,1);
+				     NULL, 4, sim_cycle, NULL, NULL,&LSQ[LSQ_head].mem_ready);
+			if(lat < 0) {
+			//mshr not available
+			break;
+			}
 		    	if (lat > cache_dl1_lat)
 			   events |= PEV_CACHEMISS;
 		    }
@@ -2212,7 +2214,7 @@ ruu_commit(void)
 		      /* access the D-TLB */
 		      lat =
 			cache_access(dtlb, Read, (LSQ[LSQ_head].addr & ~3),
-				     NULL, 4, sim_cycle, NULL, NULL,NULL,0);
+				     NULL, 4, sim_cycle, NULL, NULL,NULL);
 		      if (lat > 1)
 			events |= PEV_TLBMISS;
 		    }
@@ -2624,7 +2626,7 @@ lsq_refresh(void)
 static void
 ruu_issue(void)
 {
-  int i, load_lat, tlb_lat, n_issued,cache_access_blocked;
+  int i, load_lat, tlb_lat, n_issued,mshr_unavailable;
   struct RS_link *node, *next_node;
   struct res_template *fu;
   tick_t memready=0; 
@@ -2752,15 +2754,15 @@ ruu_issue(void)
 				  load_lat =
 				    cache_access(cache_dl1, Read,
 						 (rs->addr & ~3), NULL, 4,
-						 sim_cycle, NULL, NULL, &memready,1);
+						 sim_cycle, NULL, NULL, &memready);
 					//printf("ruu_issue 4 for addr %llu:%d\n",(rs->addr & ~3),load_lat);
   				 if (load_lat < 0) { // mshr not available
-                                            cache_access_blocked = 1;
+                                            mshr_unavailable = 1;
                                             rs->issued = FALSE;
 					    rs->mem_ready=memready;
                                             readyq_enqueue(rs);
 				 } else {
-                                            cache_access_blocked = 0;
+                                            mshr_unavailable = 0;
 
 				  	    if (load_lat > cache_dl1_lat)
 				    		events |= PEV_CACHEMISS;
@@ -2774,13 +2776,13 @@ ruu_issue(void)
 			    }
 
 			  /* all loads and stores must to access D-TLB */
-			  if (dtlb && !cache_access_blocked && MD_VALID_ADDR(rs->addr))
+			  if (dtlb && !mshr_unavailable && MD_VALID_ADDR(rs->addr))
 			    {
 			      /* access the D-DLB, NOTE: this code will
 				 initiate speculative TLB misses */
 			      tlb_lat =
 				cache_access(dtlb, Read, (rs->addr & ~3),
-					     NULL, 4, sim_cycle, NULL, NULL, NULL,0);
+					     NULL, 4, sim_cycle, NULL, NULL, NULL);
 			      if (tlb_lat > 1)
 				events |= PEV_TLBMISS;
 
@@ -2789,7 +2791,7 @@ ruu_issue(void)
 			    }
 
 			  /* use computed cache access latency */
-			  if(!cache_access_blocked){
+			  if(!mshr_unavailable){
 				 eventq_queue_event(rs, sim_cycle + load_lat);
 
 			  /* entered execute stage, indicate in pipe trace */
@@ -4264,7 +4266,7 @@ ruu_fetch(void)
 	      lat =
 		cache_access(cache_il1, Read, IACOMPRESS(fetch_regs_PC),
 			     NULL, ISCOMPRESS(sizeof(md_inst_t)), sim_cycle,
-			     NULL, NULL,NULL,0);
+			     NULL, NULL,NULL);
 	      if (lat > cache_il1_lat)
 		last_inst_missed = TRUE;
 	    }
@@ -4276,7 +4278,7 @@ ruu_fetch(void)
 	      tlb_lat =
 		cache_access(itlb, Read, IACOMPRESS(fetch_regs_PC),
 			     NULL, ISCOMPRESS(sizeof(md_inst_t)), sim_cycle,
-			     NULL, NULL,NULL,0);
+			     NULL, NULL,NULL);
 	      if (tlb_lat > 1)
 		last_inst_tmissed = TRUE;
 

@@ -300,8 +300,7 @@ cache_access(struct cache_t *cp,        /* cache to access */
              tick_t now,                /* time of access */
              byte_t **udata,            /* for return of user data ptr */
              md_addr_t *repl_addr,      /* for address of replaced block */
-             tick_t *mem_ready,
-	     int mshr_enabled);
+             tick_t *mem_ready);
 
 /* cache access functions, these are safe, they check alignment and
    permissions */

@@ -519,12 +519,9 @@ cache_reg_stats(struct cache_t *cp,	/* cache instance */
   sprintf(buf, "%s.mshr_hits", name);
   stat_reg_counter(sdb, buf, "%s mshr hits", &cp->mshr_hits, 0, NULL);
   sprintf(buf, "%s.mshr_misses", name);
-  stat_reg_counter(sdb, buf, "%s mshr misses", &cp->mshr_misses, 0, NULL);
+  stat_reg_counter(sdb, buf, "%s mshr hits", &cp->mshr_misses, 0, NULL);
   sprintf(buf, "%s.mshr_accesses", name);
   stat_reg_counter(sdb, buf, "%s mshr accesses", &cp->mshr_accesses, 0, NULL);
-  sprintf(buf, "%s.mshr_hit_rate", name);
-  sprintf(buf1, "%s.mshr_hits/%s.mshr_accesses", name,name);
-  stat_reg_formula(sdb, buf, "mshr hit rate (i.e., hits/accesses)", buf1, NULL);
   }
 }
 
